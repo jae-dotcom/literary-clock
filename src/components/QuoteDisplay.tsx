@@ -32,6 +32,7 @@ const QuoteDisplay: React.FC = () => {
     <div className="quote-display">
       <p className="quote-text">{quote.text}</p>
       {quote.author && <p className="quote-author">— {quote.author}</p>}
+      {quote.title && <p className="quote-author"><em>{quote.title}</em></p>}
     </div>
   )
 }
