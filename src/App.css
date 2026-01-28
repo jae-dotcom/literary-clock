@@ -13,6 +13,7 @@
   height: 100vh;
   width: 100%;
   gap: 2rem;
+  overflow-y: hidden;
 }
 
 .time-display {
@@ -26,7 +27,7 @@
 }
 
 .quote-text {
-  font-size: 1.5rem;
+  font-size: 2rem;
   font-style: italic;
   line-height: 1.6;
   color: #666;
@@ -34,7 +35,7 @@
 }
 
 .quote-author {
-  font-size: 1rem;
+  font-size: 1.5rem;
   color: #999;
   margin: 0.5rem 0 0 0;
 }

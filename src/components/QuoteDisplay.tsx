@@ -37,7 +37,7 @@ const QuoteDisplay: React.FC = () => {
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(decodedHtml) }}
       />
       {quote.author && <p className="quote-author">— {quote.author}</p>}
-      {/** `title` is optional; TimeQuotes.ts currently provides `time`, `text`, `author` */}
+      {quote.title && <p className="quote-author"><em>{quote.title}</em></p>}
     </div>
   )
 }

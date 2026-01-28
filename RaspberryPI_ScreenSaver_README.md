@@ -50,6 +50,113 @@ Mouse position alone does not reflect keyboard activity.
 
 **Fix:**
 Switched from `xdotool getmouselocation` to `xprintidle`, which tracks all X input.
+cat > /home/jaer/start-screensaver.sh << 'ENDSCRIPT'
+#!/bin/bash
+
+# -------------------------------------------------
+# Environment (required for keyboard + mouse input)
+# -------------------------------------------------
+export DISPLAY=:0
+export XAUTHORITY=/home/jaer/.Xauthority
+
+# ----------------
+# Configuration
+# ----------------
+IDLE_THRESHOLD=12        # Seconds before screensaver activates
+CHECK_INTERVAL=5          # Poll interval (seconds)
+URL="http://localhost:4173"
+
+APP_DIR=/home/jaer/dev/literary-clock/literary-clock/vite.config.js
+PREVIEW_PORT=4173
+
+LOG=/tmp/screensaver.log
+ERR=/tmp/screensaver-error.log
+
+# ----------------
+# Initialization
+# ----------------
+echo "[$(date '+%H:%M:%S')] Screensaver monitor started" > "$LOG"
+echo "[$(date '+%H:%M:%S')] Errors:" > "$ERR"
+
+SCREENSAVER_ACTIVE=0
+
+# ----------------
+# Helper: Start Preview Server
+# ----------------
+start_preview_server() {
+  if ! pgrep -f "npm.*preview" > /dev/null; then
+    echo "[$(date '+%H:%M:%S')] → Starting npm preview server" >> "$LOG"
+    cd "$APP_DIR" || exit 1
+    npm run preview >>"$LOG" 2>>"$ERR" &
+  fi
+}
+
+# ----------------
+# Helper: Wait for server to be ready
+# ----------------
+wait_for_server() {
+  echo "[$(date '+%H:%M:%S')] → Waiting for server on port $PREVIEW_PORT..." >> "$LOG"
+  for i in {1..15}; do
+    if nc -z localhost "$PREVIEW_PORT"; then
+      echo "[$(date '+%H:%M:%S')] → Server is up!" >> "$LOG"
+      return
+    fi
+    sleep 1
+  done
+  echo "[$(date '+%H:%M:%S')] → Warning: Server did not start in time" >> "$LOG"
+}
+
+# ----------------
+# Main Loop
+# ----------------
+while true; do
+  IDLE_MS=$(xprintidle 2>>"$ERR")
+  IDLE_SEC=$((IDLE_MS / 1000))
+
+  echo "[$(date '+%H:%M:%S')] Idle=${IDLE_SEC}s Active=$SCREENSAVER_ACTIVE" >> "$LOG"
+
+  # ---- IDLE → START SCREENSAVER ----
+  if (( IDLE_SEC >= IDLE_THRESHOLD )) && (( SCREENSAVER_ACTIVE == 0 )); then
+    echo "[$(date '+%H:%M:%S')] → Launching Chromium screensaver" >> "$LOG"
+
+    # Start preview server if not already running
+    start_preview_server
+    wait_for_server
+
+    # Launch Chromium fullscreen
+    chromium-browser \
+      --start-fullscreen \
+      --no-first-run \
+      --disable-infobars \
+      --disable-extensions \
+      --disable-background-networking \
+      --password-store=basic \
+      --user-data-dir=/tmp/screensaver-chrome \
+      "$URL" >>"$LOG" 2>>"$ERR" &
+
+    sleep 2
+
+    if pgrep -f screensaver-chrome > /dev/null; then
+      SCREENSAVER_ACTIVE=1
+      echo "[$(date '+%H:%M:%S')] → Screensaver active" >> "$LOG"
+    else
+      echo "[$(date '+%H:%M:%S')] → Failed to start Chromium" >> "$LOG"
+    fi
+  fi
+
+  # ---- ACTIVITY → STOP SCREENSAVER ----
+  if (( IDLE_SEC < IDLE_THRESHOLD )) && (( SCREENSAVER_ACTIVE == 1 )); then
+    echo "[$(date '+%H:%M:%S')] → Activity detected, closing screensaver" >> "$LOG"
+    pkill -f screensaver-chrome
+    pkill -f "npm.*preview"   # stop preview server
+    SCREENSAVER_ACTIVE=0
+  fi
+
+  sleep "$CHECK_INTERVAL"
+done
+ENDSCRIPT
+chmod +x /home/jaer/start-screensaver.sh
+
 
 ```bash
 IDLE_MS=$(xprintidle)
@@ -218,78 +325,7 @@ full-screen display.
 
 Create or replace the file:
 
-```bash
-cat > /home/jaer/start-screensaver.sh << 'ENDSCRIPT'
-#!/bin/bash
-
-# -------------------------------------------------
-# Environment (required for keyboard + mouse input)
-# -------------------------------------------------
-export DISPLAY=:0
-export XAUTHORITY=/home/jaer/.Xauthority
-
-# ----------------
-# Configuration
-# ----------------
-IDLE_THRESHOLD=120        # Seconds before screensaver activates
-CHECK_INTERVAL=5          # Poll interval (seconds)
-URL="http://localhost:4173"
-
-LOG=/tmp/screensaver.log
-ERR=/tmp/screensaver-error.log
-
-# ----------------
-# Initialization
-# ----------------
-echo "[$(date '+%H:%M:%S')] Screensaver monitor started" > "$LOG"
-echo "[$(date '+%H:%M:%S')] Errors:" > "$ERR"
-
-SCREENSAVER_ACTIVE=0
-
-# ----------------
-# Main Loop
-# ----------------
-while true; do
-  IDLE_MS=$(xprintidle 2>>"$ERR")
-  IDLE_SEC=$((IDLE_MS / 1000))
-
-  echo "[$(date '+%H:%M:%S')] Idle=${IDLE_SEC}s Active=$SCREENSAVER_ACTIVE" >> "$LOG"
-
-  # ---- IDLE → START SCREENSAVER ----
-  if (( IDLE_SEC >= IDLE_THRESHOLD )) && (( SCREENSAVER_ACTIVE == 0 )); then
-    echo "[$(date '+%H:%M:%S')] → Launching Chromium screensaver" >> "$LOG"
-
-    chromium-browser \
-      --start-fullscreen \
-      --no-first-run \
-      --disable-infobars \
-      --disable-extensions \
-      --disable-background-networking \
-      --password-store=basic \
-      --user-data-dir=/tmp/screensaver-chrome \
-      "$URL" >>"$LOG" 2>>"$ERR" &
-
-    sleep 2
-
-    if pgrep -f screensaver-chrome > /dev/null; then
-      SCREENSAVER_ACTIVE=1
-      echo "[$(date '+%H:%M:%S')] → Screensaver active" >> "$LOG"
-    else
-      echo "[$(date '+%H:%M:%S')] → Failed to start Chromium" >> "$LOG"
-    fi
-  fi
-
-  # ---- ACTIVITY → STOP SCREENSAVER ----
-  if (( IDLE_SEC < IDLE_THRESHOLD )) && (( SCREENSAVER_ACTIVE == 1 )); then
-    echo "[$(date '+%H:%M:%S')] → Activity detected, closing screensaver" >> "$LOG"
-    pkill -f screensaver-chrome
-    SCREENSAVER_ACTIVE=0
-  fi
-
-  sleep "$CHECK_INTERVAL"
-done
-ENDSCRIPT
-````
+/make_screensaver.txt
 
 Make it executable:
 
