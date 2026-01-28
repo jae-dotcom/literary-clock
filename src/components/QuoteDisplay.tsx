@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import DOMPurify from 'dompurify'
 import { TimeQuote, QUOTES } from '../constants/TimeQuotes'
 
 
@@ -24,15 +25,19 @@ const QuoteDisplay: React.FC = () => {
     return () => clearInterval(interval)
   }, [])
 
-  if (!quote) {
-    return null
-  }
+  if (!quote) return null
+
+  // decode HTML entities while preserving simple tags like <br>
+  const decodedHtml = new DOMParser().parseFromString(quote.text, 'text/html').body.innerHTML
 
   return (
     <div className="quote-display">
-      <p className="quote-text">{quote.text}</p>
+      <p
+        className="quote-text"
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(decodedHtml) }}
+      />
       {quote.author && <p className="quote-author">— {quote.author}</p>}
-      {quote.title && <p className="quote-author"><em>{quote.title}</em></p>}
+      {/** `title` is optional; TimeQuotes.ts currently provides `time`, `text`, `author` */}
     </div>
   )
 }
