@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import './TimeDisplay.css'
 
 const TimeDisplay: React.FC = () => {
   const [now, setNow] = useState<Date>(() => new Date())
